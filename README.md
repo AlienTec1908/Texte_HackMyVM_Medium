@@ -1,20 +1,20 @@
-# Taurus - HackMyVM (Medium)
+# Texte - HackMyVM (Medium)
  
-![Taurus.png](Taurus.png)
+![Texte.png](Texte.png)
 
 ## Übersicht
 
-*   **VM:** Taurus
-*   **Plattform:** HackMyVM (https://hackmyvm.eu/machines/machine.php?vm=Taurus)
+*   **VM:** Texte
+*   **Plattform:** HackMyVM (https://hackmyvm.eu/machines/machine.php?vm=Texte)
 *   **Schwierigkeit:** Medium
 *   **Autor der VM:** DarkSpirit
-*   **Datum des Writeups:** 8. Oktober 2022
-*   **Original-Writeup:** https://alientec1908.github.io/Taurus_HackMyVM_Medium/
+*   **Datum des Writeups:** 24. April 2023
+*   **Original-Writeup:** https://alientec1908.github.io/Texte_HackMyVM_Medium/
 *   **Autor:** Ben C.
 
 ## Kurzbeschreibung
 
-Das Ziel der "Taurus"-Challenge war die Erlangung von User- und Root-Rechten. Der Weg begann mit SNMP-Enumeration, die den Benutzernamen `sarah` offenbarte. Eine mit `cupp` erstellte, auf `sarah` zugeschnittene Wortliste wurde mit `hydra` verwendet, um deren SSH-Passwort (`Sarah_2012`) zu knacken. Dies ermöglichte den initialen Zugriff. Als `sarah` wurde eine `sudo`-Regel gefunden, die erlaubte, ein Skript (`/opt/ftp`) als Benutzer `marion` auszuführen. Dieses Skript baute eine Klartext-FTP-Verbindung zu `localhost` auf. Durch Mitschneiden des Loopback-Traffics mit `tcpdump` während der Ausführung des Skripts wurden die FTP-Credentials für `marion` (`ilovesushis`) ausgespäht. Nach dem Wechsel zu `marion` zeigte `sudo -l`, dass `marion` `/usr/bin/ptar` (eine `tar`-Variante) als `root` ohne Passwort ausführen durfte. Dies wurde genutzt, um das `/root`-Verzeichnis zu archivieren, das Archiv zu extrahieren und so den privaten SSH-Schlüssel von `root` zu erlangen, was den direkten SSH-Login als `root` ermöglichte.
+Das Ziel der "Texte"-Challenge war die Erlangung von User- und Root-Rechten. Der Weg begann mit der Enumeration eines Webservers (Port 80), der eine Upload-Funktion (`upload.php`) bereitstellte. Diese Funktion war anfällig für Command Injection im `filename`-Parameter des Uploads. Durch Manipulation dieses Parameters (z.B. `filename=";cat [datei]"`) und Auslesen der Base64-kodierten Ausgabe konnte der Inhalt der Datei `uiydasuiydasuicyxzuicyxziuctxzidsauidascxzAAA.txttxttxt` extrahiert werden. Diese enthielt die Credentials `kamila:hahaha$$$hahaha`. Mit diesen Credentials gelang der SSH-Login als Benutzer `kamila`. Die User-Flag wurde in dessen Home-Verzeichnis gefunden. Die Privilegieneskalation zu Root erfolgte durch Ausnutzung eines SUID/SGID-Binaries `/opt/texte`. Dieses Binary las unsicher die Konfigurationsdatei `~/.mailrc`. Durch Einfügen von `shell bash` in `kamila`s `.mailrc` und anschließendes Ausführen von `/opt/texte` wurde eine Root-Shell erlangt.
 
 ## Disclaimer / Wichtiger Hinweis
 
@@ -23,65 +23,58 @@ Die in diesem Writeup beschriebenen Techniken und Werkzeuge dienen ausschließli
 ## Verwendete Tools
 
 *   `arp-scan`
+*   `gobuster`
 *   `nmap`
-*   `snmp-check`
-*   `cupp`
-*   `hydra`
+*   `vi` / `nano`
+*   `curl`
+*   `Burp Suite` (oder manuelles POST für Command Injection)
 *   `ssh`
-*   `sudo`
-*   `bash`
-*   `tcpdump`
-*   `ptar`
-*   `tar`
+*   `sudo` (versucht)
 *   `ls`
 *   `cat`
-*   `cd`
-*   `vi`
-*   Standard Linux-Befehle (`id`, `pwd`)
+*   `find`
+*   `file`
+*   Standard Linux-Befehle (`cd`, `id`, `pwd`)
 
 ## Lösungsweg (Zusammenfassung)
 
-Der Angriff auf die Maschine "Taurus" gliederte sich in folgende Phasen:
+Der Angriff auf die Maschine "Texte" gliederte sich in folgende Phasen:
 
-1.  **Reconnaissance & Enumeration (SNMP, Username Profiling):**
-    *   IP-Findung mit `arp-scan` (`192.168.2.125`).
-    *   `nmap`-Scan identifizierte offenen Port 22 (SSH - OpenSSH 8.4p1) und gefilterten Port 21 (FTP).
-    *   `snmp-check 192.168.2.125` (mit Community `public`) offenbarte Systeminformationen und den Benutzernamen/Kontakt `Sarah`.
-    *   Erstellung einer benutzerdefinierten Passwortliste `sarah.txt` mit `cupp -i` (basierend auf dem Namen `sarah`).
+1.  **Reconnaissance & Web Enumeration:**
+    *   IP-Findung mit `arp-scan` (`192.168.2.135`).
+    *   Eintrag von `texte.hmv` in lokale `/etc/hosts`.
+    *   `nmap`-Scan identifizierte offene Ports: 22 (SSH - OpenSSH 8.4p1) und 80 (HTTP - Nginx 1.18.0 "TexteBoard").
+    *   `gobuster` auf Port 80 fand `index.html` und eine sehr kleine `upload.php` (27 Bytes).
+    *   Manuelle Analyse zeigte, dass `upload.php` eine Upload-Funktion mit Filter gegen `.PHP`-Dateien hatte.
 
-2.  **Initial Access (SSH Brute Force als `sarah`):**
-    *   `hydra -t64 -V ssh://192.168.2.125 -l sarah -P sarah.txt` knackte das SSH-Passwort für `sarah`: `Sarah_2012`.
-    *   Erfolgreicher SSH-Login als `sarah` mit dem gefundenen Passwort.
+2.  **Initial Access (RCE via Command Injection im Upload-Dateinamen):**
+    *   Identifizierung einer Command Injection Schwachstelle im `filename`-Parameter von `upload.php` während des Datei-Uploads. Das Skript verwendete den unsanitisierten `filename` in einem `shell_exec("base64 [filename]")`-Aufruf.
+    *   Auslesen des Quellcodes von `upload.php` mittels der Injection (`filename=";cat upload.php"`).
+    *   Auslesen des Inhalts der Datei `uiydasuiydasuicyxzuicyxziuctxzidsauidascxzAAA.txttxttxt` (gefunden durch vorherige `ls`-Ausgabe via Injection) mittels `filename=";cat uiydasuiydasuicyxzuicyxziuctxzidsauidascxzAAA.txttxttxt"`.
+    *   Die Datei enthielt die Credentials `kamila/hahaha$$$hahaha`.
+    *   Erfolgreicher SSH-Login als `kamila` mit dem Passwort `hahaha$$$hahaha`.
+    *   User-Flag `IdontneedPHP` in `/home/kamila/user.txt` gelesen.
 
-3.  **Privilege Escalation (von `sarah` zu `marion` via FTP Credential Sniffing):**
-    *   `sudo -l` als `sarah` zeigte: `(marion : marion) NOPASSWD: /usr/bin/bash /opt/ftp`.
-    *   Starten von `tcpdump -A -s 10240 -i lo` zum Mitschneiden des Loopback-Traffics.
-    *   Ausführen von `sudo -u marion /usr/bin/bash /opt/ftp`.
-    *   Die `tcpdump`-Ausgabe zeigte die Klartext-FTP-Credentials: `USER marion` und `PASS ilovesushis`.
-    *   Wechsel zum Benutzer `marion` (impliziert, z.B. via `su marion` mit dem Passwort `ilovesushis`).
-
-4.  **Privilege Escalation (von `marion` zu `root` via `sudo ptar` Abuse):**
-    *   `sudo -l` als `marion` zeigte: `(ALL) NOPASSWD: /usr/bin/ptar`.
-    *   Ausführung von `sudo /usr/bin/ptar -cf /tmp/root.tar /root`, um das `/root`-Verzeichnis als Root zu archivieren.
-    *   Ausführung von `tar -xf /tmp/root.tar -C /tmp/` als `marion`, um das Archiv zu entpacken.
-    *   Im extrahierten Verzeichnis `/tmp/root/.ssh/` wurde der private SSH-Schlüssel `id_rsa` von `root` gefunden.
-    *   Erfolgreicher SSH-Login als `root` mit dem extrahierten Schlüssel: `ssh -i /tmp/root/.ssh/id_rsa root@localhost`.
-    *   User-Flag `17f97ddf297442c5ecf0230a8db97e9b` in `/home/marion/user.txt` gelesen (als Root).
-    *   Root-Flag `f3c6d27bbd3e9cf452c6c4258d316ce0` in `/root/root.txt` gelesen.
+3.  **Privilege Escalation (von `kamila` zu `root` via SUID-Binary und `.mailrc`):**
+    *   `sudo -l` für `kamila` zeigte keine Sudo-Rechte.
+    *   `find / -type f -perm -4000 ...` identifizierte ein SUID-Root und SGID-`kamila` Binary: `/opt/texte`.
+    *   Erstellung/Bearbeitung der Datei `/home/kamila/.mailrc` und Hinzufügen der Zeile `shell bash`.
+    *   Ausführung von `/opt/texte` als `kamila`. Das Binary las die manipulierte `.mailrc` und startete aufgrund der `shell bash`-Direktive eine Bash-Shell mit den Rechten des SUID-Binaries (Root).
+    *   Erlangung einer Root-Shell.
+    *   Root-Flag `IlovetextEs` in `/root/root.txt` gelesen.
 
 ## Wichtige Schwachstellen und Konzepte
 
-*   **SNMP Enumeration (Default Community String):** Der SNMP-Dienst mit dem Standard-Community-String `public` gab sensible Informationen preis, darunter einen Benutzernamen.
-*   **Schwaches Passwort / Username Profiling:** Das Passwort für `sarah` konnte durch eine kleine, mit `cupp` generierte Wortliste geknackt werden.
-*   **Unsichere `sudo`-Regel (Skript-Ausführung mit Credential Leak):** Ein Skript (`/opt/ftp`), das als anderer Benutzer (`marion`) ausgeführt werden konnte, verwendete Klartext-FTP-Credentials, die über Loopback-Sniffing (`tcpdump`) abgefangen werden konnten.
-*   **Unsichere `sudo`-Regel (Archivierungstool):** Die Erlaubnis, `ptar` (eine `tar`-Variante) als `root` auszuführen, ermöglichte das Lesen beliebiger Dateien (hier des `/root`-Verzeichnisses und des Root-SSH-Schlüssels) durch Archivierung und anschließendes Entpacken als normaler Benutzer.
-*   **Auslesen privater SSH-Schlüssel:** Ermöglichte passwortlosen Root-Login.
+*   **Command Injection im Dateinamen:** Der `filename`-Parameter eines Upload-Skripts wurde unsanitisiert in einem Shell-Befehl verwendet, was RCE ermöglichte.
+*   **Klartext-Credentials in Datei:** Zugangsdaten wurden in einer verschleierten Textdatei im Web-Root gespeichert.
+*   **SUID/SGID-Binary-Exploitation:** Ein SUID-Root-Binary (`/opt/texte`) las unsicher eine benutzerkontrollierte Konfigurationsdatei (`~/.mailrc`), was die Ausführung einer beliebigen Shell (hier `bash`) mit Root-Rechten ermöglichte.
+*   **`.mailrc` Hijacking:** Manipulation der `.mailrc`-Datei zur Beeinflussung von Programmen, die diese Datei parsen.
 
 ## Flags
 
-*   **User Flag (`/home/marion/user.txt`):** `17f97ddf297442c5ecf0230a8db97e9b`
-*   **Root Flag (`/root/root.txt`):** `f3c6d27bbd3e9cf452c6c4258d316ce0`
+*   **User Flag (`/home/kamila/user.txt`):** `IdontneedPHP`
+*   **Root Flag (`/root/root.txt`):** `IlovetextEs`
 
 ## Tags
 
-`HackMyVM`, `Taurus`, `Medium`, `SNMP`, `cupp`, `Hydra`, `SSH`, `sudo Exploitation`, `tcpdump`, `FTP Credential Sniffing`, `ptar`, `tar`, `Privilege Escalation`, `Linux`
+`HackMyVM`, `Texte`, `Medium`, `Command Injection`, `File Upload Vulnerability`, `RCE`, `SUID Exploitation`, `.mailrc`, `Credentials in File`, `Linux`, `Web`, `Privilege Escalation`
